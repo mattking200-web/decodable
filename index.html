@@ -2,21 +2,36 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Decodable Book Builder</title>
+<title>Decodable Story Builder</title>
 <style>
-body { font-family: Arial; text-align: center; background:#f4f8ff; padding:20px; }
-#story { font-size: 24px; margin:20px; }
-button { padding:10px 20px; margin:10px; font-size:16px; }
-img { width:200px; height:200px; margin:10px; }
+body {
+  font-family: Arial, sans-serif;
+  background: #eef4ff;
+  text-align: center;
+  padding: 20px;
+}
+#story {
+  font-size: 26px;
+  margin: 20px;
+}
+#picture {
+  font-size: 120px;
+  margin: 20px;
+}
+button {
+  padding: 12px 20px;
+  font-size: 16px;
+  margin: 10px;
+}
 .correct { color: green; }
 .incorrect { color: red; }
 </style>
 </head>
 <body>
 
-<h1>Decodable Story Builder</h1>
+<h1>Decodable Book Builder</h1>
 
-<img id="picture" src="">
+<div id="picture"></div>
 <div id="story"></div>
 
 <button onclick="startListening()">🎤 Read Story</button>
@@ -26,102 +41,91 @@ img { width:200px; height:200px; margin:10px; }
 
 <script>
 
-// --- Basic CVC Word List ---
-let wordBank = [
-"cat","dog","pig","sun","hat","map","pen","cup",
-"run","sit","bug","jam","bat","red","box","bed"
+// Word bank grouped by meaning
+const nouns = [
+  {word:"cat", emoji:"🐱"},
+  {word:"dog", emoji:"🐶"},
+  {word:"pig", emoji:"🐷"},
+  {word:"sun", emoji:"☀️"},
+  {word:"bug", emoji:"🐞"},
+  {word:"hat", emoji:"🎩"},
+  {word:"cup", emoji:"☕"},
+  {word:"bed", emoji:"🛏️"}
 ];
 
-let missedWords = [];
-let currentStoryWords = [];
-let recognition;
-let currentStoryText = "";
+const verbs = ["run","sit","hop","dig","nap"];
+const places = ["mat","box","mud","rug","hill"];
 
-// --- Simple Image Mapping ---
-function getImage(word) {
-    return "https://dummyimage.com/200x200/cccccc/000000&text=" + word;
-}
+let missedWord = null;
+let currentStory = "";
+let targetWords = [];
 
-// --- Generate Story ---
 function generateStory() {
-    let storyWords = [];
 
-    // Prioritize missed words
-    if (missedWords.length > 0) {
-        storyWords.push(missedWords[0]);
-    }
+  let noun = nouns[Math.floor(Math.random()*nouns.length)];
+  let verb = verbs[Math.floor(Math.random()*verbs.length)];
+  let place = places[Math.floor(Math.random()*places.length)];
 
-    while (storyWords.length < 4) {
-        storyWords.push(wordBank[Math.floor(Math.random()*wordBank.length)]);
-    }
+  // If child missed a word, reuse it
+  if (missedWord) {
+    noun = nouns.find(n => n.word === missedWord) || noun;
+  }
 
-    currentStoryWords = storyWords;
-    currentStoryText = `The ${storyWords[0]} can ${storyWords[1]}. The ${storyWords[2]} is on the ${storyWords[3]}.`;
+  currentStory = `The ${noun.word} can ${verb}. The ${noun.word} is on the ${place}.`;
 
-    document.getElementById("story").innerText = currentStoryText;
-    document.getElementById("picture").src = getImage(storyWords[0]);
+  targetWords = [noun.word, verb, place];
+
+  document.getElementById("story").innerText = currentStory;
+  document.getElementById("picture").innerText = noun.emoji;
+  document.getElementById("feedback").innerHTML = "";
 }
 
 generateStory();
 
-// --- Listen to Child ---
+// Speech Recognition
 function startListening() {
 
-    recognition = new(window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = "en-US";
-    recognition.start();
+  const recognition = new(window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang = "en-US";
+  recognition.start();
 
-    recognition.onresult = function(event) {
-        let spoken = event.results[0][0].transcript.toLowerCase();
-        checkReading(spoken);
-    };
-
+  recognition.onresult = function(event) {
+    const spoken = event.results[0][0].transcript.toLowerCase();
+    checkReading(spoken);
+  };
 }
 
-// --- Check Reading ---
 function checkReading(spokenText) {
 
-    let spokenWords = spokenText.split(" ");
-    let storyWords = currentStoryText.toLowerCase().replace(/[.]/g,"").split(" ");
+  const spokenWords = spokenText.split(" ");
+  let feedbackHTML = "";
+  missedWord = null;
 
-    let feedbackHTML = "";
+  targetWords.forEach(word => {
 
-    storyWords.forEach(word => {
+    if (!spokenWords.includes(word)) {
+      feedbackHTML += `<div class="incorrect">${word} ❌</div>`;
+      missedWord = word;
+      soundOut(word);
+    } else {
+      feedbackHTML += `<div class="correct">${word} ✅</div>`;
+    }
 
-        if (isDecodable(word)) {
+  });
 
-            if (!spokenWords.includes(word)) {
-
-                feedbackHTML += `<div class="incorrect">${word} ❌</div>`;
-                missedWords = [word]; // store only latest miss
-                soundOut(word);
-
-            } else {
-                feedbackHTML += `<div class="correct">${word} ✅</div>`;
-            }
-
-        }
-    });
-
-    document.getElementById("feedback").innerHTML = feedbackHTML;
+  document.getElementById("feedback").innerHTML = feedbackHTML;
 }
 
-// --- Basic CVC Detection ---
-function isDecodable(word) {
-    return word.length === 3;
-}
-
-// --- Sound Out Word ---
 function soundOut(word) {
-    let letters = word.split("").join(" - ");
-    let utter = new SpeechSynthesisUtterance(letters + "... " + word);
-    speechSynthesis.speak(utter);
+
+  let phonics = word.split("").join(" - ");
+  let utter = new SpeechSynthesisUtterance(phonics + "... " + word);
+  utter.rate = 0.8;
+  speechSynthesis.speak(utter);
 }
 
-// --- New Story ---
 function newStory() {
-    generateStory();
-    document.getElementById("feedback").innerHTML = "";
+  generateStory();
 }
 
 </script>
