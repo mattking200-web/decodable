@@ -2,18 +2,13 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Decodable Reading Builder</title>
+<title>Decodable Reading Practice</title>
 <style>
 body {
-  font-family: Arial, sans-serif;
-  background: #f4f8ff;
+  font-family: Arial;
   text-align: center;
   padding: 20px;
-}
-
-#picture {
-  font-size: 100px;
-  margin: 20px;
+  background: #f4f8ff;
 }
 
 #story {
@@ -22,40 +17,33 @@ body {
   line-height: 1.6;
 }
 
-.word { padding: 4px; }
+.word { padding:4px; }
 
 .missed {
-  color: red;
-  cursor: pointer;
-  font-weight: bold;
-  text-decoration: underline;
+  color:red;
+  font-weight:bold;
+  text-decoration:underline;
+  cursor:pointer;
 }
 
 button {
-  padding: 12px 20px;
-  font-size: 16px;
-  margin: 10px;
+  padding:10px 20px;
+  margin:10px;
+  font-size:16px;
 }
 
-#heard {
-  margin-top: 15px;
-  font-size: 18px;
-}
-
-#status {
-  font-weight: bold;
-  margin-top: 10px;
-}
+#heard { margin-top:15px; font-size:18px; }
+#status { font-weight:bold; margin-top:10px; }
 </style>
 </head>
 <body>
 
-<h1>Decodable Story Practice</h1>
+<h1>Decodable Reading Practice</h1>
 
-<div id="picture"></div>
 <div id="story"></div>
 
-<button onclick="startListening()">🎤 Start Reading</button>
+<button onclick="startListening()">🎤 Start</button>
+<button onclick="stopListening()">⏹ Stop</button>
 <button onclick="newStory()">📖 Next Story</button>
 
 <div id="status"></div>
@@ -63,15 +51,18 @@ button {
 
 <script>
 
-// ---------------- WORD BANKS ----------------
+// ---------------- WORD BANK ----------------
 
 const nouns = ["cat","dog","pig","bug","sun"];
 const verbs = ["run","hop","dig","sit","nap"];
 const places = ["mat","box","mud","rug","hill"];
 
-let missed = { noun:null, verb:null, place:null };
-let current = { noun:null, verb:null, place:null };
+let current = {};
 let storyWords = [];
+let missed = { noun:null, verb:null, place:null };
+
+let recognition;
+let fullTranscript = "";
 
 // ---------------- STORY ----------------
 
@@ -83,46 +74,42 @@ function generateStory() {
 
   missed = { noun:null, verb:null, place:null };
 
-  let sentence1 = ["the", current.noun, "can", current.verb];
-  let sentence2 = ["the", current.noun, "is", "on", "the", current.place];
+  let s1 = ["the", current.noun, "can", current.verb];
+  let s2 = ["the", current.noun, "is", "on", "the", current.place];
 
-  storyWords = [...sentence1, ...sentence2];
-
-  renderStory(sentence1, sentence2);
-}
-
-function renderStory(s1, s2) {
-
-  const storyDiv = document.getElementById("story");
-  storyDiv.innerHTML = "";
+  storyWords = [...s1, ...s2];
 
   let formatted =
     capitalize(s1.join(" ")) + ". " +
     capitalize(s2.join(" ")) + ".";
 
-  let split = formatted.replace(/[.]/g,"").toLowerCase().split(" ");
-
-  split.forEach((word, index) => {
-    let span = document.createElement("span");
-    span.innerText = word + " ";
-    span.classList.add("word");
-    span.id = "word-" + index;
-    storyDiv.appendChild(span);
-
-    if (index === s1.length - 1) {
-      storyDiv.appendChild(document.createTextNode(". "));
-    }
-  });
-
-  storyDiv.appendChild(document.createTextNode("."));
+  renderStory();
+  document.getElementById("heard").innerText = "";
 }
 
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
+function renderStory() {
+  const div = document.getElementById("story");
+  div.innerHTML = "";
+
+  storyWords.forEach((word, index) => {
+    let span = document.createElement("span");
+    span.innerText = word + " ";
+    span.id = "word-" + index;
+    span.classList.add("word");
+    div.appendChild(span);
+
+    if (index === 3) div.appendChild(document.createTextNode(". "));
+  });
+
+  div.appendChild(document.createTextNode("."));
 }
 
 function random(arr) {
   return arr[Math.floor(Math.random()*arr.length)];
+}
+
+function capitalize(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 // ---------------- SPEECH ----------------
@@ -132,58 +119,70 @@ function startListening() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
-    alert("Use Chrome for best speech detection.");
+    alert("Use Chrome for speech recognition.");
     return;
   }
 
-  const recognition = new SpeechRecognition();
+  recognition = new SpeechRecognition();
   recognition.lang = "en-US";
-  recognition.interimResults = false;
+  recognition.continuous = true;
+  recognition.interimResults = true;
 
+  fullTranscript = "";
   document.getElementById("status").innerText = "Listening...";
+
   recognition.start();
 
   recognition.onresult = function(event) {
-    let spoken = event.results[0][0].transcript;
-    document.getElementById("status").innerText = "Processing...";
-    processSpeech(spoken);
+
+    let interim = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      let transcript = event.results[i][0].transcript;
+
+      if (event.results[i].isFinal) {
+        fullTranscript += transcript + " ";
+      } else {
+        interim += transcript;
+      }
+    }
+
+    document.getElementById("heard").innerText =
+      capitalize(fullTranscript.trim());
   };
 
-  recognition.onend = function() {
-    document.getElementById("status").innerText = "Done.";
+  recognition.onerror = function(e) {
+    document.getElementById("status").innerText = "Error: " + e.error;
   };
 }
 
-// ---------------- PROCESS + SCORE ----------------
-
-function processSpeech(text) {
-
-  text = text.toLowerCase().replace(/[.]/g,"").trim();
-  let spokenWords = text.split(/\s+/);
-
-  // Display formatted speech
-  let firstLen = 4;
-  let secondLen = 6;
-
-  let s1 = spokenWords.slice(0, firstLen).join(" ");
-  let s2 = spokenWords.slice(firstLen, firstLen+secondLen).join(" ");
-
-  document.getElementById("heard").innerText =
-    capitalize(s1) + ". " + capitalize(s2) + ".";
-
-  score(spokenWords);
+function stopListening() {
+  if (recognition) {
+    recognition.stop();
+    document.getElementById("status").innerText = "Stopped.";
+    evaluateReading();
+  }
 }
 
-function score(spokenWords) {
+// ---------------- BETTER SCORING ----------------
+
+function evaluateReading() {
+
+  let spoken = fullTranscript.toLowerCase()
+    .replace(/[.]/g,"")
+    .trim()
+    .split(/\s+/);
 
   storyWords.forEach((word, index) => {
 
     if (word.length === 3) {
 
       let span = document.getElementById("word-" + index);
-      let spokenWord = spokenWords[index] || "";
 
-      if (spokenWord !== word) {
+      // Allow small misalignment tolerance
+      let match = spoken.includes(word);
+
+      if (!match) {
 
         span.classList.add("missed");
         span.onclick = function() {
@@ -211,7 +210,7 @@ function spellWord(word) {
   speechSynthesis.speak(utter);
 }
 
-// ---------------- NEXT STORY ----------------
+// ---------------- NEXT ----------------
 
 function newStory() {
   generateStory();
@@ -222,4 +221,3 @@ generateStory();
 </script>
 </body>
 </html>
-
