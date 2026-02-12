@@ -1,223 +1,32 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Decodable Reading Practice</title>
-<style>
-body {
-  font-family: Arial;
-  text-align: center;
-  padding: 20px;
-  background: #f4f8ff;
-}
-
-#story {
-  font-size: 28px;
-  margin: 25px;
-  line-height: 1.6;
-}
-
-.word { padding:4px; }
-
-.missed {
-  color:red;
-  font-weight:bold;
-  text-decoration:underline;
-  cursor:pointer;
-}
-
-button {
-  padding:10px 20px;
-  margin:10px;
-  font-size:16px;
-}
-
-#heard { margin-top:15px; font-size:18px; }
-#status { font-weight:bold; margin-top:10px; }
-</style>
-</head>
-<body>
-
-<h1>Decodable Reading Practice</h1>
-
-<div id="story"></div>
-
-<button onclick="startListening()">🎤 Start</button>
-<button onclick="stopListening()">⏹ Stop</button>
-<button onclick="newStory()">📖 Next Story</button>
-
-<div id="status"></div>
-<div id="heard"></div>
-
-<script>
-
-// ---------------- WORD BANK ----------------
-
-const nouns = ["cat","dog","pig","bug","sun"];
-const verbs = ["run","hop","dig","sit","nap"];
-const places = ["mat","box","mud","rug","hill"];
-
-let current = {};
-let storyWords = [];
-let missed = { noun:null, verb:null, place:null };
-
-let recognition;
-let fullTranscript = "";
-
-// ---------------- STORY ----------------
-
-function generateStory() {
-
-  current.noun = missed.noun || random(nouns);
-  current.verb = missed.verb || random(verbs);
-  current.place = missed.place || random(places);
-
-  missed = { noun:null, verb:null, place:null };
-
-  let s1 = ["the", current.noun, "can", current.verb];
-  let s2 = ["the", current.noun, "is", "on", "the", current.place];
-
-  storyWords = [...s1, ...s2];
-
-  let formatted =
-    capitalize(s1.join(" ")) + ". " +
-    capitalize(s2.join(" ")) + ".";
-
-  renderStory();
-  document.getElementById("heard").innerText = "";
-}
-
 function renderStory() {
   const div = document.getElementById("story");
   div.innerHTML = "";
 
   storyWords.forEach((word, index) => {
+
+    let displayWord = word;
+
+    // Capitalize first word of sentence 1
+    if (index === 0) {
+      displayWord = capitalize(word);
+    }
+
+    // Capitalize first word of sentence 2
+    if (index === 4) {
+      displayWord = capitalize(word);
+    }
+
     let span = document.createElement("span");
-    span.innerText = word + " ";
+    span.innerText = displayWord + " ";
     span.id = "word-" + index;
     span.classList.add("word");
     div.appendChild(span);
 
-    if (index === 3) div.appendChild(document.createTextNode(". "));
+    // Add period after first sentence
+    if (index === 3) {
+      div.appendChild(document.createTextNode(". "));
+    }
   });
 
   div.appendChild(document.createTextNode("."));
 }
-
-function random(arr) {
-  return arr[Math.floor(Math.random()*arr.length)];
-}
-
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-// ---------------- SPEECH ----------------
-
-function startListening() {
-
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    alert("Use Chrome for speech recognition.");
-    return;
-  }
-
-  recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.continuous = true;
-  recognition.interimResults = true;
-
-  fullTranscript = "";
-  document.getElementById("status").innerText = "Listening...";
-
-  recognition.start();
-
-  recognition.onresult = function(event) {
-
-    let interim = "";
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      let transcript = event.results[i][0].transcript;
-
-      if (event.results[i].isFinal) {
-        fullTranscript += transcript + " ";
-      } else {
-        interim += transcript;
-      }
-    }
-
-    document.getElementById("heard").innerText =
-      capitalize(fullTranscript.trim());
-  };
-
-  recognition.onerror = function(e) {
-    document.getElementById("status").innerText = "Error: " + e.error;
-  };
-}
-
-function stopListening() {
-  if (recognition) {
-    recognition.stop();
-    document.getElementById("status").innerText = "Stopped.";
-    evaluateReading();
-  }
-}
-
-// ---------------- BETTER SCORING ----------------
-
-function evaluateReading() {
-
-  let spoken = fullTranscript.toLowerCase()
-    .replace(/[.]/g,"")
-    .trim()
-    .split(/\s+/);
-
-  storyWords.forEach((word, index) => {
-
-    if (word.length === 3) {
-
-      let span = document.getElementById("word-" + index);
-
-      // Allow small misalignment tolerance
-      let match = spoken.includes(word);
-
-      if (!match) {
-
-        span.classList.add("missed");
-        span.onclick = function() {
-          spellWord(word);
-        };
-
-        if (nouns.includes(word)) missed.noun = word;
-        if (verbs.includes(word)) missed.verb = word;
-        if (places.includes(word)) missed.place = word;
-
-      } else {
-        span.classList.remove("missed");
-        span.onclick = null;
-      }
-    }
-  });
-}
-
-// ---------------- SPELL ----------------
-
-function spellWord(word) {
-  let letters = word.split("").join(" - ");
-  let utter = new SpeechSynthesisUtterance(letters + "... " + word);
-  utter.rate = 0.8;
-  speechSynthesis.speak(utter);
-}
-
-// ---------------- NEXT ----------------
-
-function newStory() {
-  generateStory();
-}
-
-generateStory();
-
-</script>
-</body>
-</html>
