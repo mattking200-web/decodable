@@ -2,18 +2,27 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Decodable Reading Practice</title>
+<title>Decodable Reading Builder</title>
 <style>
 body {
   font-family: Arial, sans-serif;
-  background: #f2f7ff;
+  background: #f4f8ff;
   text-align: center;
   padding: 20px;
 }
 
+h1 {
+  margin-bottom: 10px;
+}
+
+#picture {
+  font-size: 100px;
+  margin: 20px;
+}
+
 #story {
-  font-size: 30px;
-  margin: 30px;
+  font-size: 28px;
+  margin: 25px;
   line-height: 1.6;
 }
 
@@ -28,15 +37,20 @@ body {
   text-decoration: underline;
 }
 
-#picture {
-  font-size: 120px;
-  margin: 20px;
-}
-
 button {
   padding: 12px 20px;
   font-size: 16px;
   margin: 10px;
+}
+
+#status {
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+#heard {
+  margin-top: 10px;
+  font-size: 18px;
 }
 </style>
 </head>
@@ -47,21 +61,22 @@ button {
 <div id="picture"></div>
 <div id="story"></div>
 
-<button onclick="startListening()">🎤 Read Story</button>
+<button onclick="startListening()">🎤 Start Reading</button>
 <button onclick="newStory()">📖 Next Story</button>
+
+<div id="status"></div>
+<div id="heard"></div>
 
 <script>
 
-// Word banks
+// ---------------- WORD BANKS ----------------
+
 const nouns = [
   {word:"cat", emoji:"🐱"},
   {word:"dog", emoji:"🐶"},
   {word:"pig", emoji:"🐷"},
   {word:"bug", emoji:"🐞"},
-  {word:"sun", emoji:"☀️"},
-  {word:"hat", emoji:"🎩"},
-  {word:"cup", emoji:"☕"},
-  {word:"bed", emoji:"🛏️"}
+  {word:"sun", emoji:"☀️"}
 ];
 
 const verbs = ["run","hop","dig","sit","nap"];
@@ -69,41 +84,40 @@ const places = ["mat","box","mud","rug","hill"];
 
 let missedWords = [];
 let currentWords = [];
-let storyWordsUsed = [];
+let currentStoryStructure = null;
 
-// Generate Story
+// ---------------- STORY GENERATION ----------------
+
 function generateStory() {
 
   let noun = nouns[Math.floor(Math.random()*nouns.length)];
   let verb = verbs[Math.floor(Math.random()*verbs.length)];
   let place = places[Math.floor(Math.random()*places.length)];
 
-  let storyCoreWords = [noun.word, verb, place];
-
-  // Add previously missed words
-  let extraWords = [...missedWords];
-
-  storyWordsUsed = [...new Set([...storyCoreWords, ...extraWords])];
-
-  let storyText = `The ${storyWordsUsed[0]} can ${storyWordsUsed[1]}. The ${storyWordsUsed[0]} is on the ${storyWordsUsed[2]}.`;
-
-  if (storyWordsUsed.length > 3) {
-    storyText += ` The ${storyWordsUsed[3]} is in the box.`;
+  // Inject previously missed words if available
+  if (missedWords.length > 0) {
+    noun.word = missedWords[0];
   }
 
-  currentWords = storyText.replace(/[.]/g,"").toLowerCase().split(" ");
+  let sentence1 = ["the", noun.word, "can", verb];
+  let sentence2 = ["the", noun.word, "is", "on", "the", place];
+
+  currentStoryStructure = [sentence1, sentence2];
+
+  currentWords = [...sentence1, ...sentence2];
 
   document.getElementById("picture").innerText = noun.emoji;
-  renderStory(currentWords);
+
+  renderStory();
+  document.getElementById("heard").innerText = "";
 }
 
-// Render story words as clickable spans
-function renderStory(words) {
+function renderStory() {
 
   const storyDiv = document.getElementById("story");
   storyDiv.innerHTML = "";
 
-  words.forEach((word, index) => {
+  currentWords.forEach((word, index) => {
 
     let span = document.createElement("span");
     span.innerText = word + " ";
@@ -111,39 +125,97 @@ function renderStory(words) {
     span.id = "word-" + index;
 
     storyDiv.appendChild(span);
+
+    // Add period after sentence 1
+    if (index === currentStoryStructure[0].length - 1) {
+      storyDiv.appendChild(document.createTextNode(". "));
+    }
   });
+
+  storyDiv.appendChild(document.createTextNode("."));
 }
 
-// Speech recognition
+// ---------------- SPEECH RECOGNITION ----------------
+
 function startListening() {
 
-  const recognition = new(window.SpeechRecognition || window.webkitSpeechRecognition)();
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("Please use Google Chrome for speech recognition.");
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+
   recognition.lang = "en-US";
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  document.getElementById("status").innerText = "🎤 Listening...";
   recognition.start();
 
   recognition.onresult = function(event) {
-    const spoken = event.results[0][0].transcript.toLowerCase();
-    checkReading(spoken);
+
+    let spoken = event.results[0][0].transcript.toLowerCase();
+    document.getElementById("status").innerText = "Processing...";
+
+    processSpeech(spoken);
+  };
+
+  recognition.onerror = function(event) {
+    document.getElementById("status").innerText = "Error: " + event.error;
+  };
+
+  recognition.onend = function() {
+    document.getElementById("status").innerText = "Finished.";
   };
 }
 
-// Check reading accuracy
-function checkReading(spokenText) {
+// ---------------- PROCESS + FORMAT + SCORE ----------------
 
-  const spokenWords = spokenText.split(" ");
+function processSpeech(spokenText) {
+
+  spokenText = spokenText.replace(/[.]/g,"").trim();
+  let spokenWords = spokenText.split(/\s+/);
+
+  let formatted = formatToStory(spokenWords);
+  document.getElementById("heard").innerText = formatted;
+
+  scoreReading(spokenWords);
+}
+
+function formatToStory(spokenWords) {
+
+  let pointer = 0;
+
+  let first = spokenWords.slice(pointer, pointer + currentStoryStructure[0].length).join(" ");
+  pointer += currentStoryStructure[0].length;
+
+  let second = spokenWords.slice(pointer, pointer + currentStoryStructure[1].length).join(" ");
+
+  function cap(s) {
+    if (!s) return "";
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  return cap(first) + ". " + cap(second) + ".";
+}
+
+function scoreReading(spokenWords) {
+
   missedWords = [];
 
   currentWords.forEach((word, index) => {
 
-    // Only check simple CVC words
-    if (word.length === 3) {
+    if (word.length === 3) { // only CVC
 
       let span = document.getElementById("word-" + index);
+      let spokenWord = spokenWords[index] || "";
 
-      if (!spokenWords.includes(word)) {
+      if (spokenWord !== word) {
 
         span.classList.add("missed");
-
         span.onclick = function() {
           spellWord(word);
         };
@@ -160,7 +232,8 @@ function checkReading(spokenText) {
   });
 }
 
-// Spell word aloud
+// ---------------- SPELL WORD ----------------
+
 function spellWord(word) {
 
   let letters = word.split("").join(" - ");
@@ -169,7 +242,8 @@ function spellWord(word) {
   speechSynthesis.speak(utter);
 }
 
-// New story
+// ---------------- NEXT STORY ----------------
+
 function newStory() {
   generateStory();
 }
@@ -179,3 +253,4 @@ generateStory();
 </script>
 </body>
 </html>
+
