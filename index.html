@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Decodable Story Builder</title>
+<title>Decodable Reading Builder</title>
 <style>
 body {
   font-family: Arial, sans-serif;
@@ -10,26 +10,42 @@ body {
   text-align: center;
   padding: 20px;
 }
+
 #story {
-  font-size: 26px;
-  margin: 20px;
+  font-size: 28px;
+  margin: 25px;
 }
+
+.word {
+  padding: 4px;
+}
+
+.missed {
+  color: red;
+  cursor: pointer;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.correct {
+  color: green;
+}
+
 #picture {
   font-size: 120px;
   margin: 20px;
 }
+
 button {
   padding: 12px 20px;
   font-size: 16px;
   margin: 10px;
 }
-.correct { color: green; }
-.incorrect { color: red; }
 </style>
 </head>
 <body>
 
-<h1>Decodable Book Builder</h1>
+<h1>Decodable Story Practice</h1>
 
 <div id="picture"></div>
 <div id="story"></div>
@@ -37,52 +53,62 @@ button {
 <button onclick="startListening()">🎤 Read Story</button>
 <button onclick="newStory()">📖 New Story</button>
 
-<div id="feedback"></div>
-
 <script>
 
-// Word bank grouped by meaning
+// Word banks
 const nouns = [
   {word:"cat", emoji:"🐱"},
   {word:"dog", emoji:"🐶"},
   {word:"pig", emoji:"🐷"},
-  {word:"sun", emoji:"☀️"},
   {word:"bug", emoji:"🐞"},
+  {word:"sun", emoji:"☀️"},
   {word:"hat", emoji:"🎩"},
   {word:"cup", emoji:"☕"},
   {word:"bed", emoji:"🛏️"}
 ];
 
-const verbs = ["run","sit","hop","dig","nap"];
+const verbs = ["run","hop","dig","sit","nap"];
 const places = ["mat","box","mud","rug","hill"];
 
 let missedWord = null;
-let currentStory = "";
-let targetWords = [];
+let currentWords = [];
+let storyText = "";
 
+// Generate Story
 function generateStory() {
 
   let noun = nouns[Math.floor(Math.random()*nouns.length)];
   let verb = verbs[Math.floor(Math.random()*verbs.length)];
   let place = places[Math.floor(Math.random()*places.length)];
 
-  // If child missed a word, reuse it
   if (missedWord) {
     noun = nouns.find(n => n.word === missedWord) || noun;
   }
 
-  currentStory = `The ${noun.word} can ${verb}. The ${noun.word} is on the ${place}.`;
+  storyText = `The ${noun.word} can ${verb}. The ${noun.word} is on the ${place}.`;
+  currentWords = storyText.replace(/[.]/g,"").toLowerCase().split(" ");
 
-  targetWords = [noun.word, verb, place];
-
-  document.getElementById("story").innerText = currentStory;
   document.getElementById("picture").innerText = noun.emoji;
-  document.getElementById("feedback").innerHTML = "";
+  renderStory();
 }
 
-generateStory();
+function renderStory() {
 
-// Speech Recognition
+  const storyDiv = document.getElementById("story");
+  storyDiv.innerHTML = "";
+
+  currentWords.forEach(word => {
+
+    let span = document.createElement("span");
+    span.innerText = word + " ";
+    span.classList.add("word");
+    span.id = "word-" + word;
+
+    storyDiv.appendChild(span);
+  });
+}
+
+// Speech recognition
 function startListening() {
 
   const recognition = new(window.SpeechRecognition || window.webkitSpeechRecognition)();
@@ -98,35 +124,44 @@ function startListening() {
 function checkReading(spokenText) {
 
   const spokenWords = spokenText.split(" ");
-  let feedbackHTML = "";
   missedWord = null;
 
-  targetWords.forEach(word => {
+  currentWords.forEach(word => {
 
-    if (!spokenWords.includes(word)) {
-      feedbackHTML += `<div class="incorrect">${word} ❌</div>`;
-      missedWord = word;
-      soundOut(word);
-    } else {
-      feedbackHTML += `<div class="correct">${word} ✅</div>`;
+    // Only check CVC words
+    if (word.length === 3) {
+
+      let span = document.getElementById("word-" + word);
+
+      if (!spokenWords.includes(word)) {
+        span.classList.add("missed");
+        span.onclick = function() {
+          spellWord(word);
+        };
+        missedWord = word;
+      } else {
+        span.classList.add("correct");
+        span.onclick = null;
+      }
     }
-
   });
-
-  document.getElementById("feedback").innerHTML = feedbackHTML;
 }
 
-function soundOut(word) {
+// Spell and say word
+function spellWord(word) {
 
-  let phonics = word.split("").join(" - ");
-  let utter = new SpeechSynthesisUtterance(phonics + "... " + word);
+  let letters = word.split("").join(" - ");
+  let utter = new SpeechSynthesisUtterance(letters + "... " + word);
   utter.rate = 0.8;
   speechSynthesis.speak(utter);
 }
 
+// New story
 function newStory() {
   generateStory();
 }
+
+generateStory();
 
 </script>
 
