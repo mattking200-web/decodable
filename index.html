@@ -2,18 +2,19 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Decodable Reading Builder</title>
+<title>Decodable Reading Practice</title>
 <style>
 body {
   font-family: Arial, sans-serif;
-  background: #eef4ff;
+  background: #f2f7ff;
   text-align: center;
   padding: 20px;
 }
 
 #story {
-  font-size: 28px;
-  margin: 25px;
+  font-size: 30px;
+  margin: 30px;
+  line-height: 1.6;
 }
 
 .word {
@@ -25,10 +26,6 @@ body {
   cursor: pointer;
   font-weight: bold;
   text-decoration: underline;
-}
-
-.correct {
-  color: green;
 }
 
 #picture {
@@ -51,7 +48,7 @@ button {
 <div id="story"></div>
 
 <button onclick="startListening()">🎤 Read Story</button>
-<button onclick="newStory()">📖 New Story</button>
+<button onclick="newStory()">📖 Next Story</button>
 
 <script>
 
@@ -70,9 +67,9 @@ const nouns = [
 const verbs = ["run","hop","dig","sit","nap"];
 const places = ["mat","box","mud","rug","hill"];
 
-let missedWord = null;
+let missedWords = [];
 let currentWords = [];
-let storyText = "";
+let storyWordsUsed = [];
 
 // Generate Story
 function generateStory() {
@@ -81,28 +78,37 @@ function generateStory() {
   let verb = verbs[Math.floor(Math.random()*verbs.length)];
   let place = places[Math.floor(Math.random()*places.length)];
 
-  if (missedWord) {
-    noun = nouns.find(n => n.word === missedWord) || noun;
+  let storyCoreWords = [noun.word, verb, place];
+
+  // Add previously missed words
+  let extraWords = [...missedWords];
+
+  storyWordsUsed = [...new Set([...storyCoreWords, ...extraWords])];
+
+  let storyText = `The ${storyWordsUsed[0]} can ${storyWordsUsed[1]}. The ${storyWordsUsed[0]} is on the ${storyWordsUsed[2]}.`;
+
+  if (storyWordsUsed.length > 3) {
+    storyText += ` The ${storyWordsUsed[3]} is in the box.`;
   }
 
-  storyText = `The ${noun.word} can ${verb}. The ${noun.word} is on the ${place}.`;
   currentWords = storyText.replace(/[.]/g,"").toLowerCase().split(" ");
 
   document.getElementById("picture").innerText = noun.emoji;
-  renderStory();
+  renderStory(currentWords);
 }
 
-function renderStory() {
+// Render story words as clickable spans
+function renderStory(words) {
 
   const storyDiv = document.getElementById("story");
   storyDiv.innerHTML = "";
 
-  currentWords.forEach(word => {
+  words.forEach((word, index) => {
 
     let span = document.createElement("span");
     span.innerText = word + " ";
     span.classList.add("word");
-    span.id = "word-" + word;
+    span.id = "word-" + index;
 
     storyDiv.appendChild(span);
   });
@@ -121,33 +127,40 @@ function startListening() {
   };
 }
 
+// Check reading accuracy
 function checkReading(spokenText) {
 
   const spokenWords = spokenText.split(" ");
-  missedWord = null;
+  missedWords = [];
 
-  currentWords.forEach(word => {
+  currentWords.forEach((word, index) => {
 
-    // Only check CVC words
+    // Only check simple CVC words
     if (word.length === 3) {
 
-      let span = document.getElementById("word-" + word);
+      let span = document.getElementById("word-" + index);
 
       if (!spokenWords.includes(word)) {
+
         span.classList.add("missed");
+
         span.onclick = function() {
           spellWord(word);
         };
-        missedWord = word;
+
+        if (!missedWords.includes(word)) {
+          missedWords.push(word);
+        }
+
       } else {
-        span.classList.add("correct");
+        span.classList.remove("missed");
         span.onclick = null;
       }
     }
   });
 }
 
-// Spell and say word
+// Spell word aloud
 function spellWord(word) {
 
   let letters = word.split("").join(" - ");
@@ -164,6 +177,5 @@ function newStory() {
 generateStory();
 
 </script>
-
 </body>
 </html>
