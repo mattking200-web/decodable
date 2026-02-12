@@ -11,10 +11,6 @@ body {
   padding: 20px;
 }
 
-h1 {
-  margin-bottom: 10px;
-}
-
 #picture {
   font-size: 100px;
   margin: 20px;
@@ -26,9 +22,7 @@ h1 {
   line-height: 1.6;
 }
 
-.word {
-  padding: 4px;
-}
+.word { padding: 4px; }
 
 .missed {
   color: red;
@@ -43,14 +37,14 @@ button {
   margin: 10px;
 }
 
-#status {
-  margin-top: 10px;
-  font-weight: bold;
+#heard {
+  margin-top: 15px;
+  font-size: 18px;
 }
 
-#heard {
+#status {
+  font-weight: bold;
   margin-top: 10px;
-  font-size: 18px;
 }
 </style>
 </head>
@@ -71,63 +65,51 @@ button {
 
 // ---------------- WORD BANKS ----------------
 
-const nouns = [
-  {word:"cat", emoji:"🐱"},
-  {word:"dog", emoji:"🐶"},
-  {word:"pig", emoji:"🐷"},
-  {word:"bug", emoji:"🐞"},
-  {word:"sun", emoji:"☀️"}
-];
-
+const nouns = ["cat","dog","pig","bug","sun"];
 const verbs = ["run","hop","dig","sit","nap"];
 const places = ["mat","box","mud","rug","hill"];
 
-let missedWords = [];
-let currentWords = [];
-let currentStoryStructure = null;
+let missed = { noun:null, verb:null, place:null };
+let current = { noun:null, verb:null, place:null };
+let storyWords = [];
 
-// ---------------- STORY GENERATION ----------------
+// ---------------- STORY ----------------
 
 function generateStory() {
 
-  let noun = nouns[Math.floor(Math.random()*nouns.length)];
-  let verb = verbs[Math.floor(Math.random()*verbs.length)];
-  let place = places[Math.floor(Math.random()*places.length)];
+  current.noun = missed.noun || random(nouns);
+  current.verb = missed.verb || random(verbs);
+  current.place = missed.place || random(places);
 
-  // Inject previously missed words if available
-  if (missedWords.length > 0) {
-    noun.word = missedWords[0];
-  }
+  missed = { noun:null, verb:null, place:null };
 
-  let sentence1 = ["the", noun.word, "can", verb];
-  let sentence2 = ["the", noun.word, "is", "on", "the", place];
+  let sentence1 = ["the", current.noun, "can", current.verb];
+  let sentence2 = ["the", current.noun, "is", "on", "the", current.place];
 
-  currentStoryStructure = [sentence1, sentence2];
+  storyWords = [...sentence1, ...sentence2];
 
-  currentWords = [...sentence1, ...sentence2];
-
-  document.getElementById("picture").innerText = noun.emoji;
-
-  renderStory();
-  document.getElementById("heard").innerText = "";
+  renderStory(sentence1, sentence2);
 }
 
-function renderStory() {
+function renderStory(s1, s2) {
 
   const storyDiv = document.getElementById("story");
   storyDiv.innerHTML = "";
 
-  currentWords.forEach((word, index) => {
+  let formatted =
+    capitalize(s1.join(" ")) + ". " +
+    capitalize(s2.join(" ")) + ".";
 
+  let split = formatted.replace(/[.]/g,"").toLowerCase().split(" ");
+
+  split.forEach((word, index) => {
     let span = document.createElement("span");
     span.innerText = word + " ";
     span.classList.add("word");
     span.id = "word-" + index;
-
     storyDiv.appendChild(span);
 
-    // Add period after sentence 1
-    if (index === currentStoryStructure[0].length - 1) {
+    if (index === s1.length - 1) {
       storyDiv.appendChild(document.createTextNode(". "));
     }
   });
@@ -135,80 +117,68 @@ function renderStory() {
   storyDiv.appendChild(document.createTextNode("."));
 }
 
-// ---------------- SPEECH RECOGNITION ----------------
+function capitalize(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function random(arr) {
+  return arr[Math.floor(Math.random()*arr.length)];
+}
+
+// ---------------- SPEECH ----------------
 
 function startListening() {
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
-    alert("Please use Google Chrome for speech recognition.");
+    alert("Use Chrome for best speech detection.");
     return;
   }
 
   const recognition = new SpeechRecognition();
-
   recognition.lang = "en-US";
   recognition.interimResults = false;
-  recognition.continuous = false;
 
-  document.getElementById("status").innerText = "🎤 Listening...";
+  document.getElementById("status").innerText = "Listening...";
   recognition.start();
 
   recognition.onresult = function(event) {
-
-    let spoken = event.results[0][0].transcript.toLowerCase();
+    let spoken = event.results[0][0].transcript;
     document.getElementById("status").innerText = "Processing...";
-
     processSpeech(spoken);
   };
 
-  recognition.onerror = function(event) {
-    document.getElementById("status").innerText = "Error: " + event.error;
-  };
-
   recognition.onend = function() {
-    document.getElementById("status").innerText = "Finished.";
+    document.getElementById("status").innerText = "Done.";
   };
 }
 
-// ---------------- PROCESS + FORMAT + SCORE ----------------
+// ---------------- PROCESS + SCORE ----------------
 
-function processSpeech(spokenText) {
+function processSpeech(text) {
 
-  spokenText = spokenText.replace(/[.]/g,"").trim();
-  let spokenWords = spokenText.split(/\s+/);
+  text = text.toLowerCase().replace(/[.]/g,"").trim();
+  let spokenWords = text.split(/\s+/);
 
-  let formatted = formatToStory(spokenWords);
-  document.getElementById("heard").innerText = formatted;
+  // Display formatted speech
+  let firstLen = 4;
+  let secondLen = 6;
 
-  scoreReading(spokenWords);
+  let s1 = spokenWords.slice(0, firstLen).join(" ");
+  let s2 = spokenWords.slice(firstLen, firstLen+secondLen).join(" ");
+
+  document.getElementById("heard").innerText =
+    capitalize(s1) + ". " + capitalize(s2) + ".";
+
+  score(spokenWords);
 }
 
-function formatToStory(spokenWords) {
+function score(spokenWords) {
 
-  let pointer = 0;
+  storyWords.forEach((word, index) => {
 
-  let first = spokenWords.slice(pointer, pointer + currentStoryStructure[0].length).join(" ");
-  pointer += currentStoryStructure[0].length;
-
-  let second = spokenWords.slice(pointer, pointer + currentStoryStructure[1].length).join(" ");
-
-  function cap(s) {
-    if (!s) return "";
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
-
-  return cap(first) + ". " + cap(second) + ".";
-}
-
-function scoreReading(spokenWords) {
-
-  missedWords = [];
-
-  currentWords.forEach((word, index) => {
-
-    if (word.length === 3) { // only CVC
+    if (word.length === 3) {
 
       let span = document.getElementById("word-" + index);
       let spokenWord = spokenWords[index] || "";
@@ -220,9 +190,9 @@ function scoreReading(spokenWords) {
           spellWord(word);
         };
 
-        if (!missedWords.includes(word)) {
-          missedWords.push(word);
-        }
+        if (nouns.includes(word)) missed.noun = word;
+        if (verbs.includes(word)) missed.verb = word;
+        if (places.includes(word)) missed.place = word;
 
       } else {
         span.classList.remove("missed");
@@ -232,10 +202,9 @@ function scoreReading(spokenWords) {
   });
 }
 
-// ---------------- SPELL WORD ----------------
+// ---------------- SPELL ----------------
 
 function spellWord(word) {
-
   let letters = word.split("").join(" - ");
   let utter = new SpeechSynthesisUtterance(letters + "... " + word);
   utter.rate = 0.8;
