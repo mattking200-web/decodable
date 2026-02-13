@@ -261,54 +261,68 @@
 
                 recognitionRef.current = new SpeechRecognition();
                 recognitionRef.current.continuous = false;
-                recognitionRef.current.interimResults = true; // Show interim results
+                recognitionRef.current.interimResults = true;
                 recognitionRef.current.lang = 'en-US';
                 recognitionRef.current.maxAlternatives = 5;
 
-                const currentWord = story.pages[currentPage].words[currentWordIndex];
+                const currentSentence = story.pages[currentPage].text;
 
                 recognitionRef.current.onstart = () => {
                     setIsListening(true);
                     setHeardText('');
-                    setFeedback(`🎤 Say the word: "${currentWord.replace(/[.,!?]/g, '')}"`);
+                    setCurrentWordIndex(0); // Reset to show we're checking the whole sentence
+                    setFeedback(`🎤 Read the sentence out loud!`);
                 };
 
                 recognitionRef.current.onresult = (event) => {
-                    // Get the latest result
                     const last = event.results.length - 1;
                     const transcript = event.results[last][0].transcript.toLowerCase().trim();
                     
-                    // Show what we're hearing in real-time
                     setHeardText(transcript);
                     
-                    // Only process if it's a final result
                     if (event.results[last].isFinal) {
-                        const currentWord = story.pages[currentPage].words[currentWordIndex].toLowerCase().replace(/[.,!?]/g, '');
+                        console.log('Final heard:', transcript);
+                        console.log('Expected words:', story.pages[currentPage].words);
+
+                        // Split what they said into words
+                        const spokenWords = transcript.replace(/[.,!?]/g, '').split(/\s+/);
+                        const expectedWords = story.pages[currentPage].words.map(w => w.toLowerCase().replace(/[.,!?]/g, ''));
+
+                        console.log('Spoken:', spokenWords);
+                        console.log('Expected:', expectedWords);
+
+                        // Find the first mismatched word
+                        let firstError = -1;
+                        const minLength = Math.min(spokenWords.length, expectedWords.length);
                         
-                        console.log('Final heard:', transcript, 'Expected:', currentWord);
+                        for (let i = 0; i < minLength; i++) {
+                            const spoken = spokenWords[i];
+                            const expected = expectedWords[i];
+                            
+                            // Check if words match (exactly or closely)
+                            const matches = spoken === expected || 
+                                          spoken.includes(expected) || 
+                                          expected.includes(spoken) ||
+                                          levenshteinDistance(spoken, expected) <= 1;
+                            
+                            if (!matches) {
+                                firstError = i;
+                                break;
+                            }
+                        }
 
-                        // More lenient matching - check if the word appears anywhere in what was said
-                        const words = transcript.split(' ');
-                        const isMatch = words.some(word => {
-                            return word === currentWord || 
-                                   word.includes(currentWord) || 
-                                   currentWord.includes(word) ||
-                                   levenshteinDistance(word, currentWord) <= 1;
-                        });
+                        // Check if they said too few or too many words
+                        if (firstError === -1 && spokenWords.length !== expectedWords.length) {
+                            firstError = minLength; // Highlight where they stopped or went over
+                        }
 
-                        if (isMatch) {
-                            // Correct!
-                            setFeedback(`✨ Perfect! You said "${transcript}" - ${currentWord} is correct!`);
+                        if (firstError === -1) {
+                            // Perfect! All words correct
+                            setFeedback(`🎉 Perfect! You read the whole sentence correctly!`);
+                            setCurrentWordIndex(expectedWords.length); // Show all as complete
 
-                            // Move to next word
-                            if (currentWordIndex < story.pages[currentPage].words.length - 1) {
-                                setTimeout(() => {
-                                    setCurrentWordIndex(currentWordIndex + 1);
-                                    setIsListening(false);
-                                    setHeardText('');
-                                }, 1500);
-                            } else if (currentPage < story.pages.length - 1) {
-                                // Next page
+                            // Move to next sentence
+                            if (currentPage < story.pages.length - 1) {
                                 setTimeout(() => {
                                     setCurrentPage(currentPage + 1);
                                     setCurrentWordIndex(0);
@@ -318,19 +332,24 @@
                                 }, 2000);
                             } else {
                                 // Story complete!
-                                setFeedback('🎉 WOW! You read the whole story! You\'re amazing!');
+                                setFeedback('🎉 WOW! You read the whole story perfectly! You\'re amazing!');
                                 setIsListening(false);
                                 setHeardText('');
                             }
                         } else {
-                            // Incorrect - sound it out
-                            setFeedback(`I heard "${transcript}" but the word is "${currentWord}". Let's practice!`);
+                            // Found an error - highlight that word
+                            setCurrentWordIndex(firstError);
+                            const wrongWord = expectedWords[firstError];
+                            const saidWord = spokenWords[firstError] || '(nothing)';
+                            
+                            setFeedback(`The word "${wrongWord}" was read as "${saidWord}". Let's practice "${wrongWord}"!`);
+                            
                             setTimeout(() => {
-                                soundOutWord(currentWord);
+                                soundOutWord(wrongWord);
                             }, 1000);
 
                             // Add to missed words
-                            const newMissedWords = [...new Set([...missedWords, currentWord])];
+                            const newMissedWords = [...new Set([...missedWords, wrongWord])];
                             setMissedWords(newMissedWords);
                             saveMissedWords(newMissedWords);
 
@@ -462,7 +481,7 @@
                                                 <span
                                                     key={idx}
                                                     className={`inline-block mx-1 px-2 py-1 rounded-lg transition-all ${
-                                                        idx === currentWordIndex
+                                                        idx === currentWordIndex && !isListening
                                                             ? 'bg-yellow-300 text-purple-900 font-black scale-110 shadow-lg border-2 border-purple-400'
                                                             : idx < currentWordIndex
                                                             ? 'text-green-600 font-bold'
@@ -510,10 +529,15 @@
                                         </button>
 
                                         <button
-                                            onClick={() => speakWord(story.pages[currentPage].words[currentWordIndex])}
+                                            onClick={() => {
+                                                const wordToHear = currentWordIndex < story.pages[currentPage].words.length 
+                                                    ? story.pages[currentPage].words[currentWordIndex]
+                                                    : story.pages[currentPage].words[0];
+                                                speakWord(wordToHear);
+                                            }}
                                             className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-6 py-3 rounded-full text-lg font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center gap-2 border-4 border-blue-600"
                                         >
-                                            <Volume2 /> Hear It
+                                            <Volume2 /> Hear Word
                                         </button>
 
                                         <button
@@ -558,7 +582,7 @@
                         <div className="mt-6 bg-white/80 backdrop-blur rounded-2xl p-4 border-4 border-purple-300 text-center">
                             <p className="text-lg text-gray-700">
                                 <strong>📚 How to Play:</strong> Click "Make a Story" → Press "Start Reading" → 
-                                Read each yellow word out loud → I'll help if you need it! 🌟
+                                Read the WHOLE sentence out loud → If you make a mistake, the wrong word will turn yellow! 🌟
                             </p>
                         </div>
                     </div>
