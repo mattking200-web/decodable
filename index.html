@@ -1,205 +1,538 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Decodable Reading Builder</title>
-
-<style>
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  padding: 20px;
-  background: #f4f8fb;
-}
-
-#story {
-  font-size: 30px;
-  margin: 20px;
-  line-height: 1.6;
-}
-
-.word {
-  cursor: pointer;
-  padding: 4px;
-}
-
-.incorrect {
-  color: red;
-  font-weight: bold;
-}
-
-button {
-  padding: 10px 20px;
-  font-size: 18px;
-  margin: 10px;
-  cursor: pointer;
-}
-
-#feedback {
-  font-size: 20px;
-  margin-top: 15px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reading Adventure</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Fredoka', 'Comic Sans MS', cursive;
+        }
+    </style>
 </head>
-
 <body>
+    <div id="root"></div>
 
-<h1>Decodable Reading Practice</h1>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-<div id="story"></div>
+        // Simple icon components
+        const BookOpen = () => (
+            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+        );
 
-<button onclick="startReading()">Start Reading</button>
-<button onclick="stopReading()">Stop</button>
-<button onclick="newStory()">New Story</button>
+        const Sparkles = () => (
+            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+        );
 
-<div id="feedback"></div>
+        const Mic = () => (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+        );
 
-<script>
+        const MicOff = () => (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+            </svg>
+        );
 
-let recognition;
-let displayWords = [];  // With capitalization
-let scoringWords = [];  // Lowercase only
-let missedWords = [];
+        const Volume2 = () => (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            </svg>
+        );
 
-// Word banks
-const nouns = ["cat","dog","sun","hat","box"];
-const verbs = ["run","sit","dig"];
-const prepositions = ["on","in"];
+        const RotateCcw = () => (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+        );
 
-// Build structured sentences
-function buildStory() {
+        function DecodableReader() {
+            const [story, setStory] = useState(null);
+            const [currentPage, setCurrentPage] = useState(0);
+            const [isListening, setIsListening] = useState(false);
+            const [currentWordIndex, setCurrentWordIndex] = useState(0);
+            const [missedWords, setMissedWords] = useState([]);
+            const [feedback, setFeedback] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [imageUrl, setImageUrl] = useState('');
 
-  let noun1 = nouns[Math.floor(Math.random()*nouns.length)];
-  let noun2 = nouns[Math.floor(Math.random()*nouns.length)];
-  let verb = verbs[Math.floor(Math.random()*verbs.length)];
-  let prep = prepositions[Math.floor(Math.random()*prepositions.length)];
+            const recognitionRef = useRef(null);
+            const synthRef = useRef(window.speechSynthesis);
 
-  // If student missed a word, force it in
-  if(missedWords.length > 0){
-    noun1 = missedWords[0];
-  }
+            useEffect(() => {
+                loadMissedWords();
+            }, []);
 
-  // Sentence 1
-  const sentence1 = ["The", noun1, "can", verb + "."];
-  const sentence2 = ["The", noun2, "is", prep, "the", noun1 + "."];
+            const loadMissedWords = async () => {
+                try {
+                    const result = await window.storage.get('missed-words');
+                    if (result) {
+                        setMissedWords(JSON.parse(result.value));
+                    }
+                } catch (error) {
+                    console.log('No previous missed words found');
+                }
+            };
 
-  displayWords = [...sentence1, ...sentence2];
+            const saveMissedWords = async (words) => {
+                try {
+                    await window.storage.set('missed-words', JSON.stringify(words));
+                } catch (error) {
+                    console.error('Failed to save missed words:', error);
+                }
+            };
 
-  // Lowercase clean scoring version
-  scoringWords = displayWords
-    .join(" ")
-    .toLowerCase()
-    .replace(/[^\w\s]/g,"")
-    .split(" ");
-}
+            const generateStory = async () => {
+                setIsGenerating(true);
+                setFeedback('Creating your story...');
 
-// Render story
-function renderStory(){
+                try {
+                    // Try AI generation first
+                    const prompt = missedWords.length > 0
+                        ? `Create a very short decodable story with ONLY 2-3 simple sentences for beginning readers. Include these words the child needs to practice: ${missedWords.join(', ')}. Use simple CVC words (cat, dog, sit, run, hat, map). Make it fun for ages 5-7. Keep it SHORT - just 2-3 sentences!`
+                        : `Create a very short decodable story with ONLY 2-3 simple sentences for beginning readers. Use only simple CVC words like: cat, dog, sit, run, hat, map, bed, sun, pig, top. Make it fun for ages 5-7. Keep it SHORT - just 2-3 sentences!`;
 
-  const storyDiv = document.getElementById("story");
-  storyDiv.innerHTML = "";
+                    const response = await fetch("https://api.anthropic.com/v1/messages", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            model: "claude-sonnet-4-20250514",
+                            max_tokens: 1000,
+                            messages: [
+                                { 
+                                    role: "user", 
+                                    content: prompt
+                                }
+                            ],
+                        })
+                    });
 
-  displayWords.forEach(word => {
+                    if (!response.ok) {
+                        throw new Error('API call failed');
+                    }
 
-    const cleanWord = word.replace(".", "");
+                    const data = await response.json();
+                    const storyText = data.content[0].text;
 
-    const span = document.createElement("span");
-    span.classList.add("word");
-    span.innerText = word + " ";
-    span.onclick = () => spellWord(cleanWord);
+                    // Parse story into sentences
+                    const sentences = storyText.split(/[.!?]+/).filter(s => s.trim().length > 0);
 
-    storyDiv.appendChild(span);
-  });
-}
+                    // Create pages with words
+                    const pages = sentences.slice(0, 3).map(sentence => ({
+                        text: sentence.trim() + '.',
+                        words: sentence.trim().split(/\s+/)
+                    }));
 
-function spellWord(word){
+                    setStory({ pages });
+                    setCurrentPage(0);
+                    setCurrentWordIndex(0);
 
-  speechSynthesis.cancel();
+                    // Generate a simple colorful image
+                    const colors = ['FFB6C1', 'FFE4B5', 'B0E0E6', 'DDA0DD', 'F0E68C', 'E0BBE4'];
+                    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                    const emojis = ['📚', '🌟', '🐱', '🐶', '☀️', '🌈', '🎨'];
+                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                    
+                    setImageUrl(`https://placehold.co/600x300/${randomColor}/663399?text=${randomEmoji}+Story+Time!&font=raleway`);
 
-  const utter = new SpeechSynthesisUtterance(
-    word.split("").join(" ") + ". " + word
-  );
+                    setFeedback('Story ready! Click "Start Reading" and read each word out loud!');
+                } catch (error) {
+                    console.error('Error generating story, using fallback:', error);
+                    // Fallback to pre-made stories
+                    generateFallbackStory();
+                }
 
-  speechSynthesis.speak(utter);
-}
+                setIsGenerating(false);
+            };
 
-function newStory(){
-  buildStory();
-  renderStory();
-  document.getElementById("feedback").innerText = "";
-}
+            const generateFallbackStory = () => {
+                // Pre-made simple decodable stories
+                const simpleStories = [
+                    {
+                        sentences: ["The cat sat on the mat.", "The cat is fat.", "I pet the cat."],
+                        emoji: "🐱"
+                    },
+                    {
+                        sentences: ["The dog can run.", "The dog ran to Tom.", "Tom and the dog had fun."],
+                        emoji: "🐶"
+                    },
+                    {
+                        sentences: ["The sun is hot.", "Sam sat in the sun.", "Sam got a tan hat."],
+                        emoji: "☀️"
+                    },
+                    {
+                        sentences: ["The pig is big.", "The pig is in mud.", "The pig can dig."],
+                        emoji: "🐷"
+                    },
+                    {
+                        sentences: ["The bug is on the rug.", "Get the bug in a cup.", "Let the bug go."],
+                        emoji: "🐛"
+                    },
+                    {
+                        sentences: ["The hen is red.", "The hen sat on ten eggs.", "The hen is in the pen."],
+                        emoji: "🐔"
+                    },
+                    {
+                        sentences: ["Dan has a van.", "The van can go fast.", "Dan had a map in the van."],
+                        emoji: "🚐"
+                    }
+                ];
 
-function startReading(){
+                // If there are missed words, try to use a story with those words
+                let selectedStory;
+                if (missedWords.length > 0) {
+                    selectedStory = simpleStories.find(story => 
+                        missedWords.some(word => 
+                            story.sentences.join(' ').toLowerCase().includes(word.toLowerCase())
+                        )
+                    );
+                }
 
-  if(!('webkitSpeechRecognition' in window)){
-    alert("Use Chrome browser.");
-    return;
-  }
+                // If no match found, pick a random story
+                if (!selectedStory) {
+                    selectedStory = simpleStories[Math.floor(Math.random() * simpleStories.length)];
+                }
 
-  recognition = new webkitSpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = false;
-  recognition.lang = "en-US";
+                const pages = selectedStory.sentences.map(sentence => ({
+                    text: sentence,
+                    words: sentence.split(/\s+/)
+                }));
 
-  recognition.onresult = function(event){
-    const transcript =
-      event.results[event.results.length-1][0].transcript;
+                setStory({ pages });
+                setCurrentPage(0);
+                setCurrentWordIndex(0);
 
-    compareReading(transcript);
-  };
+                // Generate image
+                const colors = ['FFB6C1', 'FFE4B5', 'B0E0E6', 'DDA0DD', 'F0E68C', 'E0BBE4'];
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                setImageUrl(`https://placehold.co/600x300/${randomColor}/663399?text=${selectedStory.emoji}+Story+Time!&font=raleway`);
 
-  recognition.start();
-  document.getElementById("feedback").innerText = "Listening...";
-}
+                setFeedback('Story ready! Click "Start Reading" and read each word out loud!');
+            };
 
-function stopReading(){
-  if(recognition) recognition.stop();
-}
+            const soundOutWord = (word) => {
+                const utterance = new SpeechSynthesisUtterance();
+                utterance.rate = 0.5;
+                utterance.pitch = 1.1;
 
-function compareReading(spokenText){
+                // Sound out each letter
+                const letters = word.toLowerCase().replace(/[.,!?]/g, '').split('');
+                const soundedOut = letters.join(' . . . ');
 
-  const spoken = spokenText
-    .toLowerCase()
-    .replace(/[^\w\s]/g,"")
-    .split(/\s+/)
-    .filter(Boolean);
+                utterance.text = `Let's sound it out slowly: ${soundedOut} ... ${word}`;
+                synthRef.current.speak(utterance);
+            };
 
-  let storyIndex = 0;
-  missedWords = [];
+            const speakWord = (word) => {
+                const cleanWord = word.replace(/[.,!?]/g, '');
+                const utterance = new SpeechSynthesisUtterance(cleanWord);
+                utterance.rate = 0.7;
+                synthRef.current.speak(utterance);
+            };
 
-  for(let i=0; i<spoken.length && storyIndex<scoringWords.length; i++){
+            const startListening = () => {
+                if (!story) {
+                    setFeedback('Please generate a story first!');
+                    return;
+                }
 
-    if(spoken[i] === scoringWords[storyIndex]){
-      storyIndex++;
-    }
-  }
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                
+                if (!SpeechRecognition) {
+                    setFeedback('Speech recognition not supported. Try Chrome or Edge browser!');
+                    return;
+                }
 
-  if(storyIndex === scoringWords.length){
-    document.getElementById("feedback").innerText =
-      "Great reading!";
-  } else {
+                recognitionRef.current = new SpeechRecognition();
+                recognitionRef.current.continuous = false;
+                recognitionRef.current.interimResults = false;
+                recognitionRef.current.lang = 'en-US';
+                recognitionRef.current.maxAlternatives = 3;
 
-    missedWords = scoringWords.slice(storyIndex);
-    highlightMissed(storyIndex);
+                recognitionRef.current.onstart = () => {
+                    setIsListening(true);
+                    const currentWord = story.pages[currentPage].words[currentWordIndex];
+                    setFeedback(`🎤 Listening... Read: "${currentWord.replace(/[.,!?]/g, '')}"`);
+                };
 
-    document.getElementById("feedback").innerText =
-      "Click red words to hear them.";
-  }
-}
+                recognitionRef.current.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript.toLowerCase().trim();
+                    const currentWord = story.pages[currentPage].words[currentWordIndex].toLowerCase().replace(/[.,!?]/g, '');
 
-function highlightMissed(startIndex){
+                    console.log('Heard:', transcript, 'Expected:', currentWord);
 
-  const spans = document.querySelectorAll(".word");
+                    // More lenient matching
+                    const words = transcript.split(' ');
+                    const isMatch = words.some(word => {
+                        return word === currentWord || 
+                               word.includes(currentWord) || 
+                               currentWord.includes(word) ||
+                               levenshteinDistance(word, currentWord) <= 1;
+                    });
 
-  for(let i=startIndex; i<spans.length; i++){
-    spans[i].classList.add("incorrect");
-  }
-}
+                    if (isMatch) {
+                        // Correct!
+                        setFeedback(`✨ Perfect! "${currentWord}"`);
 
-newStory();
+                        // Move to next word
+                        if (currentWordIndex < story.pages[currentPage].words.length - 1) {
+                            setTimeout(() => {
+                                setCurrentWordIndex(currentWordIndex + 1);
+                                setIsListening(false);
+                            }, 1200);
+                        } else if (currentPage < story.pages.length - 1) {
+                            // Next page
+                            setTimeout(() => {
+                                setCurrentPage(currentPage + 1);
+                                setCurrentWordIndex(0);
+                                setIsListening(false);
+                                setFeedback('🌟 Great! Next sentence!');
+                            }, 1500);
+                        } else {
+                            // Story complete!
+                            setFeedback('🎉 WOW! You read the whole story! You\'re amazing!');
+                            setIsListening(false);
+                        }
+                    } else {
+                        // Incorrect - sound it out
+                        setFeedback(`Let's practice "${currentWord}" together!`);
+                        setTimeout(() => {
+                            soundOutWord(currentWord);
+                        }, 500);
 
-</script>
+                        // Add to missed words
+                        const newMissedWords = [...new Set([...missedWords, currentWord])];
+                        setMissedWords(newMissedWords);
+                        saveMissedWords(newMissedWords);
 
+                        setTimeout(() => setIsListening(false), 4000);
+                    }
+                };
+
+                recognitionRef.current.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    
+                    if (event.error === 'no-speech') {
+                        setFeedback('I didn\'t hear anything. Try speaking louder!');
+                    } else if (event.error === 'not-allowed') {
+                        setFeedback('Please allow microphone access in your browser settings.');
+                    } else {
+                        setFeedback('Try again! Click "Start Reading"');
+                    }
+                    setIsListening(false);
+                };
+
+                recognitionRef.current.onend = () => {
+                    if (isListening) {
+                        setIsListening(false);
+                    }
+                };
+
+                try {
+                    recognitionRef.current.start();
+                } catch (error) {
+                    console.error('Error starting recognition:', error);
+                    setFeedback('Click "Start Reading" to try again!');
+                    setIsListening(false);
+                }
+            };
+
+            // Simple Levenshtein distance for fuzzy matching
+            const levenshteinDistance = (str1, str2) => {
+                const matrix = [];
+                for (let i = 0; i <= str2.length; i++) {
+                    matrix[i] = [i];
+                }
+                for (let j = 0; j <= str1.length; j++) {
+                    matrix[0][j] = j;
+                }
+                for (let i = 1; i <= str2.length; i++) {
+                    for (let j = 1; j <= str1.length; j++) {
+                        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                            matrix[i][j] = matrix[i - 1][j - 1];
+                        } else {
+                            matrix[i][j] = Math.min(
+                                matrix[i - 1][j - 1] + 1,
+                                matrix[i][j - 1] + 1,
+                                matrix[i - 1][j] + 1
+                            );
+                        }
+                    }
+                }
+                return matrix[str2.length][str1.length];
+            };
+
+            const stopListening = () => {
+                if (recognitionRef.current) {
+                    recognitionRef.current.stop();
+                }
+                setIsListening(false);
+            };
+
+            const resetProgress = () => {
+                setCurrentPage(0);
+                setCurrentWordIndex(0);
+                setFeedback('Let\'s start from the beginning!');
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-yellow-200 via-pink-200 to-purple-300 p-6">
+                    <div className="max-w-3xl mx-auto">
+                        {/* Header */}
+                        <div className="text-center mb-8">
+                            <div className="inline-flex items-center gap-3 bg-white rounded-full px-8 py-4 shadow-2xl border-4 border-purple-400">
+                                <BookOpen />
+                                <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
+                                    Reading Adventure
+                                </h1>
+                                <Sparkles />
+                            </div>
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="bg-white rounded-3xl shadow-2xl p-8 border-4 border-purple-400">
+                            {!story ? (
+                                <div className="text-center py-12">
+                                    <div className="text-6xl mb-4">📚</div>
+                                    <h2 className="text-3xl font-bold text-purple-700 mb-4">
+                                        Ready for a Story?
+                                    </h2>
+                                    <p className="text-xl text-gray-600 mb-8">
+                                        I'll create a fun story just for you!
+                                    </p>
+
+                                    <button
+                                        onClick={generateStory}
+                                        disabled={isGenerating}
+                                        className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-12 py-5 rounded-full text-2xl font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed border-4 border-purple-600"
+                                    >
+                                        {isGenerating ? '✨ Creating...' : '🎨 Make a Story!'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div>
+                                    {/* Image */}
+                                    {imageUrl && (
+                                        <div className="mb-6 rounded-2xl overflow-hidden border-4 border-purple-300">
+                                            <img src={imageUrl} alt="Story" className="w-full h-48 object-cover" />
+                                        </div>
+                                    )}
+
+                                    {/* Story Text */}
+                                    <div className="bg-gradient-to-r from-yellow-50 to-pink-50 rounded-2xl p-6 mb-6 border-4 border-yellow-300">
+                                        <p className="text-3xl leading-relaxed">
+                                            {story.pages[currentPage].words.map((word, idx) => (
+                                                <span
+                                                    key={idx}
+                                                    className={`inline-block mx-1 px-2 py-1 rounded-lg transition-all ${
+                                                        idx === currentWordIndex
+                                                            ? 'bg-yellow-300 text-purple-900 font-black scale-110 shadow-lg border-2 border-purple-400'
+                                                            : idx < currentWordIndex
+                                                            ? 'text-green-600 font-bold'
+                                                            : 'text-gray-800'
+                                                    }`}
+                                                >
+                                                    {word}
+                                                </span>
+                                            ))}
+                                        </p>
+                                    </div>
+
+                                    {/* Feedback */}
+                                    {feedback && (
+                                        <div className="bg-gradient-to-r from-blue-100 to-cyan-100 border-4 border-blue-300 rounded-2xl p-4 mb-6 text-center">
+                                            <p className="text-xl font-bold text-blue-800">
+                                                {feedback}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Controls */}
+                                    <div className="flex gap-3 justify-center flex-wrap">
+                                        <button
+                                            onClick={isListening ? stopListening : startListening}
+                                            className={`${
+                                                isListening 
+                                                    ? 'bg-gradient-to-r from-red-500 to-orange-500 animate-pulse' 
+                                                    : 'bg-gradient-to-r from-green-500 to-teal-500'
+                                            } text-white px-6 py-3 rounded-full text-lg font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center gap-2 border-4`}
+                                        >
+                                            {isListening ? <><MicOff /> Stop</> : <><Mic /> Start Reading</>}
+                                        </button>
+
+                                        <button
+                                            onClick={() => speakWord(story.pages[currentPage].words[currentWordIndex])}
+                                            className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-6 py-3 rounded-full text-lg font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center gap-2 border-4 border-blue-600"
+                                        >
+                                            <Volume2 /> Hear It
+                                        </button>
+
+                                        <button
+                                            onClick={resetProgress}
+                                            className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white px-6 py-3 rounded-full text-lg font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center gap-2 border-4 border-orange-600"
+                                        >
+                                            <RotateCcw /> Restart
+                                        </button>
+
+                                        <button
+                                            onClick={generateStory}
+                                            disabled={isGenerating}
+                                            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full text-lg font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all disabled:opacity-50 flex items-center gap-2 border-4 border-purple-600"
+                                        >
+                                            <Sparkles /> New Story
+                                        </button>
+                                    </div>
+
+                                    {/* Missed Words */}
+                                    {missedWords.length > 0 && (
+                                        <div className="mt-6 bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl p-4 border-4 border-orange-300">
+                                            <h3 className="text-lg font-bold text-orange-800 mb-2">
+                                                🎯 Practice Words:
+                                            </h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                {missedWords.map((word, idx) => (
+                                                    <span 
+                                                        key={idx}
+                                                        className="bg-white text-orange-700 px-3 py-1 rounded-full font-bold border-2 border-orange-400"
+                                                    >
+                                                        {word}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Instructions */}
+                        <div className="mt-6 bg-white/80 backdrop-blur rounded-2xl p-4 border-4 border-purple-300 text-center">
+                            <p className="text-lg text-gray-700">
+                                <strong>📚 How to Play:</strong> Click "Make a Story" → Press "Start Reading" → 
+                                Read each yellow word out loud → I'll help if you need it! 🌟
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<DecodableReader />, document.getElementById('root'));
+    </script>
 </body>
 </html>
