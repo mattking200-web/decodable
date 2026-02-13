@@ -13,12 +13,8 @@ body {
   background: #f4f8fb;
 }
 
-h1 {
-  font-size: 28px;
-}
-
 #story {
-  font-size: 28px;
+  font-size: 30px;
   margin: 20px;
   line-height: 1.6;
 }
@@ -44,10 +40,6 @@ button {
   font-size: 20px;
   margin-top: 15px;
 }
-
-#image {
-  margin-top: 15px;
-}
 </style>
 </head>
 
@@ -57,79 +49,72 @@ button {
 
 <div id="story"></div>
 
-<div>
-  <button onclick="startReading()">Start Reading</button>
-  <button onclick="stopReading()">Stop</button>
-  <button onclick="newStory()">New Story</button>
-</div>
+<button onclick="startReading()">Start Reading</button>
+<button onclick="stopReading()">Stop</button>
+<button onclick="newStory()">New Story</button>
 
 <div id="feedback"></div>
-<div id="image"></div>
 
 <script>
 
 let recognition;
-let storyWords = [];
+let displayWords = [];  // With capitalization
+let scoringWords = [];  // Lowercase only
 let missedWords = [];
 
-const baseWordBank = [
-  "cat","dog","sun","box","hat","sit","run","dig","can","is","on","the"
-];
+// Word banks
+const nouns = ["cat","dog","sun","hat","box"];
+const verbs = ["run","sit","dig"];
+const prepositions = ["on","in"];
 
-function capitalize(word){
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
+// Build structured sentences
+function buildStory() {
 
-function buildStoryWords(){
-  let words = [];
+  let noun1 = nouns[Math.floor(Math.random()*nouns.length)];
+  let noun2 = nouns[Math.floor(Math.random()*nouns.length)];
+  let verb = verbs[Math.floor(Math.random()*verbs.length)];
+  let prep = prepositions[Math.floor(Math.random()*prepositions.length)];
 
+  // If student missed a word, force it in
   if(missedWords.length > 0){
-    words.push(missedWords[0]);
+    noun1 = missedWords[0];
   }
 
-  while(words.length < 8){
-    words.push(baseWordBank[Math.floor(Math.random()*baseWordBank.length)]);
-  }
+  // Sentence 1
+  const sentence1 = ["The", noun1, "can", verb + "."];
+  const sentence2 = ["The", noun2, "is", prep, "the", noun1 + "."];
 
-  return words;
+  displayWords = [...sentence1, ...sentence2];
+
+  // Lowercase clean scoring version
+  scoringWords = displayWords
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^\w\s]/g,"")
+    .split(" ");
 }
 
+// Render story
 function renderStory(){
 
   const storyDiv = document.getElementById("story");
   storyDiv.innerHTML = "";
 
-  const sentence1 = storyWords.slice(0,4);
-  const sentence2 = storyWords.slice(4);
+  displayWords.forEach(word => {
 
-  const fullStory = [
-    ...sentence1,
-    ".",
-    ...sentence2,
-    "."
-  ];
-
-  fullStory.forEach(word => {
-
-    if(word === "."){
-      storyDiv.innerHTML += ". ";
-      return;
-    }
+    const cleanWord = word.replace(".", "");
 
     const span = document.createElement("span");
     span.classList.add("word");
     span.innerText = word + " ";
-    span.onclick = () => spellWord(word);
+    span.onclick = () => spellWord(cleanWord);
 
     storyDiv.appendChild(span);
   });
-
-  // Capitalize first word visually
-  storyDiv.firstChild.innerText =
-    capitalize(storyWords[0]) + " ";
 }
 
 function spellWord(word){
+
   speechSynthesis.cancel();
 
   const utter = new SpeechSynthesisUtterance(
@@ -140,17 +125,15 @@ function spellWord(word){
 }
 
 function newStory(){
-  storyWords = buildStoryWords();
+  buildStory();
   renderStory();
   document.getElementById("feedback").innerText = "";
-  document.getElementById("image").innerHTML =
-    "<img src='https://source.unsplash.com/300x200/?child,reading' />";
 }
 
 function startReading(){
 
   if(!('webkitSpeechRecognition' in window)){
-    alert("Use Chrome for best results.");
+    alert("Use Chrome browser.");
     return;
   }
 
@@ -167,8 +150,7 @@ function startReading(){
   };
 
   recognition.start();
-  document.getElementById("feedback").innerText =
-    "Listening...";
+  document.getElementById("feedback").innerText = "Listening...";
 }
 
 function stopReading(){
@@ -177,33 +159,32 @@ function stopReading(){
 
 function compareReading(spokenText){
 
-  const cleanSpoken = spokenText
+  const spoken = spokenText
     .toLowerCase()
-    .replace(/[^\w\s]/g, "")
+    .replace(/[^\w\s]/g,"")
     .split(/\s+/)
     .filter(Boolean);
 
   let storyIndex = 0;
   missedWords = [];
 
-  for(let i=0; i<cleanSpoken.length && storyIndex<storyWords.length; i++){
+  for(let i=0; i<spoken.length && storyIndex<scoringWords.length; i++){
 
-    if(cleanSpoken[i] === storyWords[storyIndex]){
+    if(spoken[i] === scoringWords[storyIndex]){
       storyIndex++;
     }
   }
 
-  if(storyIndex === storyWords.length){
+  if(storyIndex === scoringWords.length){
     document.getElementById("feedback").innerText =
       "Great reading!";
   } else {
 
-    missedWords = storyWords.slice(storyIndex);
-
+    missedWords = scoringWords.slice(storyIndex);
     highlightMissed(storyIndex);
 
     document.getElementById("feedback").innerText =
-      "Click red words to hear and spell them.";
+      "Click red words to hear them.";
   }
 }
 
