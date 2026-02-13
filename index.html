@@ -68,6 +68,7 @@
             const [feedback, setFeedback] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
             const [imageUrl, setImageUrl] = useState('');
+            const [heardText, setHeardText] = useState('');
 
             const recognitionRef = useRef(null);
             const synthRef = useRef(window.speechSynthesis);
@@ -260,67 +261,84 @@
 
                 recognitionRef.current = new SpeechRecognition();
                 recognitionRef.current.continuous = false;
-                recognitionRef.current.interimResults = false;
+                recognitionRef.current.interimResults = true; // Show interim results
                 recognitionRef.current.lang = 'en-US';
-                recognitionRef.current.maxAlternatives = 3;
+                recognitionRef.current.maxAlternatives = 5;
+
+                const currentWord = story.pages[currentPage].words[currentWordIndex];
 
                 recognitionRef.current.onstart = () => {
                     setIsListening(true);
-                    const currentWord = story.pages[currentPage].words[currentWordIndex];
-                    setFeedback(`🎤 Listening... Read: "${currentWord.replace(/[.,!?]/g, '')}"`);
+                    setHeardText('');
+                    setFeedback(`🎤 Say the word: "${currentWord.replace(/[.,!?]/g, '')}"`);
                 };
 
                 recognitionRef.current.onresult = (event) => {
-                    const transcript = event.results[0][0].transcript.toLowerCase().trim();
-                    const currentWord = story.pages[currentPage].words[currentWordIndex].toLowerCase().replace(/[.,!?]/g, '');
+                    // Get the latest result
+                    const last = event.results.length - 1;
+                    const transcript = event.results[last][0].transcript.toLowerCase().trim();
+                    
+                    // Show what we're hearing in real-time
+                    setHeardText(transcript);
+                    
+                    // Only process if it's a final result
+                    if (event.results[last].isFinal) {
+                        const currentWord = story.pages[currentPage].words[currentWordIndex].toLowerCase().replace(/[.,!?]/g, '');
+                        
+                        console.log('Final heard:', transcript, 'Expected:', currentWord);
 
-                    console.log('Heard:', transcript, 'Expected:', currentWord);
+                        // More lenient matching - check if the word appears anywhere in what was said
+                        const words = transcript.split(' ');
+                        const isMatch = words.some(word => {
+                            return word === currentWord || 
+                                   word.includes(currentWord) || 
+                                   currentWord.includes(word) ||
+                                   levenshteinDistance(word, currentWord) <= 1;
+                        });
 
-                    // More lenient matching
-                    const words = transcript.split(' ');
-                    const isMatch = words.some(word => {
-                        return word === currentWord || 
-                               word.includes(currentWord) || 
-                               currentWord.includes(word) ||
-                               levenshteinDistance(word, currentWord) <= 1;
-                    });
+                        if (isMatch) {
+                            // Correct!
+                            setFeedback(`✨ Perfect! You said "${transcript}" - ${currentWord} is correct!`);
 
-                    if (isMatch) {
-                        // Correct!
-                        setFeedback(`✨ Perfect! "${currentWord}"`);
-
-                        // Move to next word
-                        if (currentWordIndex < story.pages[currentPage].words.length - 1) {
-                            setTimeout(() => {
-                                setCurrentWordIndex(currentWordIndex + 1);
+                            // Move to next word
+                            if (currentWordIndex < story.pages[currentPage].words.length - 1) {
+                                setTimeout(() => {
+                                    setCurrentWordIndex(currentWordIndex + 1);
+                                    setIsListening(false);
+                                    setHeardText('');
+                                }, 1500);
+                            } else if (currentPage < story.pages.length - 1) {
+                                // Next page
+                                setTimeout(() => {
+                                    setCurrentPage(currentPage + 1);
+                                    setCurrentWordIndex(0);
+                                    setIsListening(false);
+                                    setHeardText('');
+                                    setFeedback('🌟 Great! Next sentence!');
+                                }, 2000);
+                            } else {
+                                // Story complete!
+                                setFeedback('🎉 WOW! You read the whole story! You\'re amazing!');
                                 setIsListening(false);
-                            }, 1200);
-                        } else if (currentPage < story.pages.length - 1) {
-                            // Next page
-                            setTimeout(() => {
-                                setCurrentPage(currentPage + 1);
-                                setCurrentWordIndex(0);
-                                setIsListening(false);
-                                setFeedback('🌟 Great! Next sentence!');
-                            }, 1500);
+                                setHeardText('');
+                            }
                         } else {
-                            // Story complete!
-                            setFeedback('🎉 WOW! You read the whole story! You\'re amazing!');
-                            setIsListening(false);
+                            // Incorrect - sound it out
+                            setFeedback(`I heard "${transcript}" but the word is "${currentWord}". Let's practice!`);
+                            setTimeout(() => {
+                                soundOutWord(currentWord);
+                            }, 1000);
+
+                            // Add to missed words
+                            const newMissedWords = [...new Set([...missedWords, currentWord])];
+                            setMissedWords(newMissedWords);
+                            saveMissedWords(newMissedWords);
+
+                            setTimeout(() => {
+                                setIsListening(false);
+                                setHeardText('');
+                            }, 5000);
                         }
-                    } else {
-                        // Incorrect - sound it out
-                        setFeedback(`Let's practice "${currentWord}" together!`);
-                        setTimeout(() => {
-                            soundOutWord(currentWord);
-                        }, 500);
-
-                        // Add to missed words
-                        const newMissedWords = [...new Set([...missedWords, currentWord])];
-                        setMissedWords(newMissedWords);
-                        saveMissedWords(newMissedWords);
-
-                        setTimeout(() => setIsListening(false), 4000);
                     }
                 };
 
@@ -328,13 +346,17 @@
                     console.error('Speech recognition error:', event.error);
                     
                     if (event.error === 'no-speech') {
-                        setFeedback('I didn\'t hear anything. Try speaking louder!');
+                        setFeedback('I didn\'t hear anything. Try speaking a bit louder!');
+                        setHeardText('(nothing heard)');
                     } else if (event.error === 'not-allowed') {
                         setFeedback('Please allow microphone access in your browser settings.');
+                    } else if (event.error === 'aborted') {
+                        setFeedback('Click "Start Reading" again!');
                     } else {
-                        setFeedback('Try again! Click "Start Reading"');
+                        setFeedback(`Error: ${event.error}. Try again!`);
                     }
                     setIsListening(false);
+                    setTimeout(() => setHeardText(''), 3000);
                 };
 
                 recognitionRef.current.onend = () => {
@@ -458,6 +480,18 @@
                                         <div className="bg-gradient-to-r from-blue-100 to-cyan-100 border-4 border-blue-300 rounded-2xl p-4 mb-6 text-center">
                                             <p className="text-xl font-bold text-blue-800">
                                                 {feedback}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* What I Heard Display */}
+                                    {(isListening || heardText) && (
+                                        <div className="bg-gradient-to-r from-purple-100 to-pink-100 border-4 border-purple-300 rounded-2xl p-4 mb-6">
+                                            <p className="text-sm font-bold text-purple-600 mb-1">
+                                                {isListening ? '👂 I hear you saying:' : '👂 I heard:'}
+                                            </p>
+                                            <p className="text-2xl font-bold text-purple-900">
+                                                {heardText || '...'}
                                             </p>
                                         </div>
                                     )}
