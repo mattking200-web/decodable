@@ -1,32 +1,224 @@
-function renderStory() {
-  const div = document.getElementById("story");
-  div.innerHTML = "";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decodable Reading Builder</title>
 
-  storyWords.forEach((word, index) => {
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 20px;
+  background: #f4f8fb;
+}
 
-    let displayWord = word;
+h1 {
+  font-size: 28px;
+}
 
-    // Capitalize first word of sentence 1
-    if (index === 0) {
-      displayWord = capitalize(word);
+#story {
+  font-size: 28px;
+  margin: 20px;
+  line-height: 1.6;
+}
+
+.word {
+  cursor: pointer;
+  padding: 4px;
+}
+
+.incorrect {
+  color: red;
+  font-weight: bold;
+}
+
+button {
+  padding: 10px 20px;
+  font-size: 18px;
+  margin: 10px;
+  cursor: pointer;
+}
+
+#feedback {
+  font-size: 20px;
+  margin-top: 15px;
+}
+
+#image {
+  margin-top: 15px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Decodable Reading Practice</h1>
+
+<div id="story"></div>
+
+<div>
+  <button onclick="startReading()">Start Reading</button>
+  <button onclick="stopReading()">Stop</button>
+  <button onclick="newStory()">New Story</button>
+</div>
+
+<div id="feedback"></div>
+<div id="image"></div>
+
+<script>
+
+let recognition;
+let storyWords = [];
+let missedWords = [];
+
+const baseWordBank = [
+  "cat","dog","sun","box","hat","sit","run","dig","can","is","on","the"
+];
+
+function capitalize(word){
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function buildStoryWords(){
+  let words = [];
+
+  if(missedWords.length > 0){
+    words.push(missedWords[0]);
+  }
+
+  while(words.length < 8){
+    words.push(baseWordBank[Math.floor(Math.random()*baseWordBank.length)]);
+  }
+
+  return words;
+}
+
+function renderStory(){
+
+  const storyDiv = document.getElementById("story");
+  storyDiv.innerHTML = "";
+
+  const sentence1 = storyWords.slice(0,4);
+  const sentence2 = storyWords.slice(4);
+
+  const fullStory = [
+    ...sentence1,
+    ".",
+    ...sentence2,
+    "."
+  ];
+
+  fullStory.forEach(word => {
+
+    if(word === "."){
+      storyDiv.innerHTML += ". ";
+      return;
     }
 
-    // Capitalize first word of sentence 2
-    if (index === 4) {
-      displayWord = capitalize(word);
-    }
-
-    let span = document.createElement("span");
-    span.innerText = displayWord + " ";
-    span.id = "word-" + index;
+    const span = document.createElement("span");
     span.classList.add("word");
-    div.appendChild(span);
+    span.innerText = word + " ";
+    span.onclick = () => spellWord(word);
 
-    // Add period after first sentence
-    if (index === 3) {
-      div.appendChild(document.createTextNode(". "));
-    }
+    storyDiv.appendChild(span);
   });
 
-  div.appendChild(document.createTextNode("."));
+  // Capitalize first word visually
+  storyDiv.firstChild.innerText =
+    capitalize(storyWords[0]) + " ";
 }
+
+function spellWord(word){
+  speechSynthesis.cancel();
+
+  const utter = new SpeechSynthesisUtterance(
+    word.split("").join(" ") + ". " + word
+  );
+
+  speechSynthesis.speak(utter);
+}
+
+function newStory(){
+  storyWords = buildStoryWords();
+  renderStory();
+  document.getElementById("feedback").innerText = "";
+  document.getElementById("image").innerHTML =
+    "<img src='https://source.unsplash.com/300x200/?child,reading' />";
+}
+
+function startReading(){
+
+  if(!('webkitSpeechRecognition' in window)){
+    alert("Use Chrome for best results.");
+    return;
+  }
+
+  recognition = new webkitSpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.lang = "en-US";
+
+  recognition.onresult = function(event){
+    const transcript =
+      event.results[event.results.length-1][0].transcript;
+
+    compareReading(transcript);
+  };
+
+  recognition.start();
+  document.getElementById("feedback").innerText =
+    "Listening...";
+}
+
+function stopReading(){
+  if(recognition) recognition.stop();
+}
+
+function compareReading(spokenText){
+
+  const cleanSpoken = spokenText
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  let storyIndex = 0;
+  missedWords = [];
+
+  for(let i=0; i<cleanSpoken.length && storyIndex<storyWords.length; i++){
+
+    if(cleanSpoken[i] === storyWords[storyIndex]){
+      storyIndex++;
+    }
+  }
+
+  if(storyIndex === storyWords.length){
+    document.getElementById("feedback").innerText =
+      "Great reading!";
+  } else {
+
+    missedWords = storyWords.slice(storyIndex);
+
+    highlightMissed(storyIndex);
+
+    document.getElementById("feedback").innerText =
+      "Click red words to hear and spell them.";
+  }
+}
+
+function highlightMissed(startIndex){
+
+  const spans = document.querySelectorAll(".word");
+
+  for(let i=startIndex; i<spans.length; i++){
+    spans[i].classList.add("incorrect");
+  }
+}
+
+newStory();
+
+</script>
+
+</body>
+</html>
